@@ -16,7 +16,8 @@ export function formatSessionAsText(session: WorkoutSession): string {
       .map((s) => (s.reps != null ? `${s.weight}x${s.reps}` : `${s.weight}x_`))
       .join(', ')
     const notes = ex.notes ? ` (${ex.notes})` : ''
-    lines.push(`${ex.name}: ${setsText}${notes}`)
+    const subNote = ex.substitutedFrom ? ` [sub for ${ex.substitutedFrom}]` : ''
+    lines.push(`${ex.name}${subNote}: ${setsText}${notes}`)
   }
   return lines.join('\n')
 }

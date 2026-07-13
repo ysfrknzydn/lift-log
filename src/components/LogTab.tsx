@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SPLIT_DAYS, type ExerciseEntry, type SplitDay, type WorkoutSession } from '../lib/types'
 import { getLastSessionFor, loadSessions, newId, upsertSession } from '../lib/storage'
-import { getLastPerformance } from '../lib/analytics'
+import { getLastPerformance, suggestProgression } from '../lib/analytics'
 import ExerciseCard from './ExerciseCard'
 
 function today(): string {
@@ -16,7 +16,9 @@ function buildTemplate(date: string, splitDay: SplitDay): WorkoutSession {
     .filter((ex) => !ex.skipped)
     .map((ex) => ({
       id: newId(),
-      name: ex.name,
+      // Revert to the originally planned exercise, even if last time was a substitute —
+      // a sub is a one-off, not a permanent replacement of this slot.
+      name: ex.substitutedFrom ?? ex.name,
       sets: ex.sets.map((s) => ({ reps: null, weight: s.weight })),
       skipped: false,
       notes: '',
@@ -83,6 +85,16 @@ export default function LogTab() {
     return map
   }, [session, allSessions])
 
+  const suggestions = useMemo(() => {
+    if (!session) return new Map<string, ReturnType<typeof suggestProgression>>()
+    const map = new Map<string, ReturnType<typeof suggestProgression>>()
+    for (const ex of session.exercises) {
+      if (!ex.name) continue
+      map.set(ex.id, suggestProgression(allSessions, ex.name, session.id))
+    }
+    return map
+  }, [session, allSessions])
+
   return (
     <div className="px-4 pt-6">
       <h1 className="text-lg font-semibold text-neutral-100">Log workout</h1>
@@ -125,6 +137,7 @@ export default function LogTab() {
               key={ex.id}
               exercise={ex}
               lastPerformance={lastPerformances.get(ex.id)}
+              suggestion={suggestions.get(ex.id)}
               onChange={(updated) => updateExercise(idx, updated)}
               onRemove={() => removeExercise(idx)}
             />

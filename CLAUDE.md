@@ -64,9 +64,18 @@ count) from the most recent past session with that same split day via
 `getLastSessionFor`, leaving `reps` blank for fresh entry. This is how
 "last week's plan becomes this week's starting point" works — there's no
 separate "routine" or "template" entity, the previous session *is* the
-template. Editing a cloned exercise's name effectively creates a new,
-unrelated exercise for history-matching purposes (see below) — this is
-intentional, it's how exercise substitutions are meant to be recorded.
+template.
+
+**Substitutions** (`ExerciseEntry.substitutedFrom` in `src/lib/types.ts`,
+UI in `src/components/ExerciseCard.tsx`): the "Sub exercise" button renames
+`name` to the substitute and stashes the original in `substitutedFrom`, so
+the substitute gets tracked as its own exercise for history/analytics
+purposes (for free, via the same case-insensitive name matching everything
+else uses) while `buildTemplate()` reverts to `substitutedFrom` when
+cloning forward — a substitution is a one-off, not a permanent change to
+what this slot normally is. Renaming the name field directly (no sub
+button) still works as a bare rename and is treated as a permanent
+identity change instead, since no `substitutedFrom` gets set.
 
 **Autosave, not explicit save**: `LogTab` only calls `upsertSession`
 (persists) from inside mutation handlers, never on the initial
@@ -74,22 +83,33 @@ template-load effect. This means opening a split day you don't end up
 logging leaves no trace in History — only actual edits get persisted.
 Preserve this distinction if touching the load/save flow.
 
-**Exercise identity is name-based, case-insensitive**: history lookups
-(`getLastPerformance`, `exerciseHistory`, `allExerciseNames` in
-`src/lib/analytics.ts`) match exercises across sessions by
-`name.toLowerCase()`, not by any stable id. Renaming an exercise in the UI
-therefore breaks its historical trend line and starts a new one — treated
-as a feature (substitution tracking), not a bug.
+**Exercise identity is name-based, case-insensitive**: every history/analytics
+lookup (`getLastPerformance`, `exerciseHistory`, `allExerciseNames`,
+`suggestProgression` in `src/lib/analytics.ts`) matches exercises across
+sessions by `name.toLowerCase()`, not by any stable id. This is the
+mechanism substitution tracking (above) relies on — no separate join table,
+just consistent naming.
 
 **Analytics** (`src/lib/analytics.ts`): estimated 1RM uses the Epley
 formula. "Stalled" exercise detection (surfaced in
 `src/components/ProgressTab.tsx`) flags any exercise whose top working
 weight hasn't increased across its last 3+ logged sessions.
+`suggestProgression` drives the "↑ +N this week" badge in `ExerciseCard`:
+it's an indicator only (never mutates a session) and fires when either (a)
+every set last time hit the 8-rep ceiling (time to add weight), or (b)
+estimated 1RM improved over the last two sessions while reps stayed at 6+.
+The suggested amount is +5 lbs above a 60 lb top weight, +2.5 below — a
+rough stand-in for "compounds get bigger jumps than isolation work," since
+exercises aren't otherwise categorized.
 
-**Export** (`src/lib/export.ts`): formats one or more sessions as plain
-text (`formatSessionsAsText`) matching a manual notes-app log style, copied
-via the Clipboard API from the History tab. This is the only data
-egress path — there is no file export/import.
+**Data egress** (`src/lib/export.ts`, `src/lib/storage.ts`): two paths, both
+from the History tab. `formatSessionsAsText`/`copyToClipboard` format
+sessions as plain text (matching a manual notes-app log style) for pasting
+elsewhere. `exportSessionsAsJson`/`importSessions` round-trip the full
+`localStorage` array as a downloadable/restorable JSON file — the closest
+thing to a backup, since there's no sync or accounts. Import validates each
+session's shape before accepting it and supports either replacing or
+merging (by session `id`) with what's already on-device.
 
 **Code splitting**: `ProgressTab` (pulls in `recharts`) is lazy-loaded from
 `App.tsx` so the Log tab — the one opened most, mid-workout — isn't gated
