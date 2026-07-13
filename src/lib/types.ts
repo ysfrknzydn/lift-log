@@ -10,7 +10,6 @@ export interface SetEntry {
 export interface ExerciseEntry {
   id: string
   name: string
-  plannedWeight: number
   sets: SetEntry[]
   skipped: boolean
   notes: string

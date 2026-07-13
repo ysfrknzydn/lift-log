@@ -1,4 +1,4 @@
-import type { ExerciseEntry } from '../lib/types'
+import type { ExerciseEntry, SetEntry } from '../lib/types'
 import type { LastPerformance } from '../lib/analytics'
 
 interface Props {
@@ -8,28 +8,65 @@ interface Props {
   onRemove: () => void
 }
 
+function Stepper({
+  value,
+  onChange,
+  step,
+  placeholder,
+}: {
+  value: number | null
+  onChange: (next: number | null) => void
+  step: number
+  placeholder: string
+}) {
+  const bump = (delta: number) => onChange(Math.max(0, (value ?? 0) + delta))
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => bump(-step)}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-base font-medium text-neutral-300 active:bg-neutral-700"
+        aria-label={`Decrease ${placeholder}`}
+      >
+        −
+      </button>
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value ?? ''}
+        onFocus={(e) => e.target.select()}
+        onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
+        placeholder={placeholder}
+        className="w-11 rounded-lg border border-neutral-800 bg-neutral-950 py-1.5 text-center text-base text-neutral-100 outline-none focus:border-purple-500"
+      />
+      <button
+        type="button"
+        onClick={() => bump(step)}
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-neutral-800 text-base font-medium text-neutral-300 active:bg-neutral-700"
+        aria-label={`Increase ${placeholder}`}
+      >
+        +
+      </button>
+    </div>
+  )
+}
+
 export default function ExerciseCard({ exercise, lastPerformance, onChange, onRemove }: Props) {
   const update = (patch: Partial<ExerciseEntry>) => onChange({ ...exercise, ...patch })
 
-  const updateSet = (idx: number, patch: Partial<ExerciseEntry['sets'][number]>) => {
+  const updateSet = (idx: number, patch: Partial<SetEntry>) => {
     const sets = exercise.sets.map((s, i) => (i === idx ? { ...s, ...patch } : s))
     update({ sets })
   }
 
   const addSet = () => {
     const last = exercise.sets[exercise.sets.length - 1]
-    update({
-      sets: [...exercise.sets, { reps: null, weight: last?.weight ?? exercise.plannedWeight }],
-    })
+    update({ sets: [...exercise.sets, { reps: null, weight: last?.weight ?? 0 }] })
   }
 
   const removeSet = (idx: number) => {
     update({ sets: exercise.sets.filter((_, i) => i !== idx) })
-  }
-
-  const bumpPlanned = (delta: number) => {
-    const next = Math.max(0, exercise.plannedWeight + delta)
-    update({ plannedWeight: next })
   }
 
   return (
@@ -53,80 +90,38 @@ export default function ExerciseCard({ exercise, lastPerformance, onChange, onRe
 
       {lastPerformance && (
         <p className="mt-0.5 text-xs text-neutral-500">
-          Last ({lastPerformance.date.slice(5)}): {lastPerformance.setsSummary} @ planned{' '}
-          {lastPerformance.plannedWeight}
+          Last time ({lastPerformance.date.slice(5)}): {lastPerformance.setsSummary}
         </p>
       )}
 
-      <div className="mt-2 flex items-center gap-2">
-        <button
-          type="button"
-          onClick={() => update({ skipped: !exercise.skipped })}
-          className={`rounded-lg px-3 py-1.5 text-xs font-medium ${
-            exercise.skipped
-              ? 'bg-red-500/20 text-red-400'
-              : 'bg-neutral-800 text-neutral-400'
-          }`}
-        >
-          {exercise.skipped ? 'Skipped' : 'Skip'}
-        </button>
-
-        {!exercise.skipped && (
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => bumpPlanned(-5)}
-              className="h-7 w-7 rounded-lg bg-neutral-800 text-neutral-300 active:bg-neutral-700"
-            >
-              −
-            </button>
-            <input
-              type="number"
-              inputMode="decimal"
-              value={exercise.plannedWeight}
-              onChange={(e) => update({ plannedWeight: Number(e.target.value) || 0 })}
-              className="w-14 rounded-lg bg-neutral-800 py-1 text-center text-sm text-neutral-100 outline-none"
-            />
-            <button
-              type="button"
-              onClick={() => bumpPlanned(5)}
-              className="h-7 w-7 rounded-lg bg-neutral-800 text-neutral-300 active:bg-neutral-700"
-            >
-              +
-            </button>
-            <span className="text-xs text-neutral-500">lbs planned</span>
-          </div>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => update({ skipped: !exercise.skipped })}
+        className={`mt-2 rounded-lg px-3 py-1.5 text-xs font-medium ${
+          exercise.skipped ? 'bg-red-500/20 text-red-400' : 'bg-neutral-800 text-neutral-400'
+        }`}
+      >
+        {exercise.skipped ? 'Marked as skipped' : 'Skip this exercise'}
+      </button>
 
       {!exercise.skipped && (
-        <div className="mt-3 space-y-1.5">
+        <div className="mt-3 space-y-2">
           {exercise.sets.map((set, idx) => (
-            <div key={idx} className="flex items-center gap-2">
-              <span className="w-5 text-xs text-neutral-500">{idx + 1}</span>
-              <input
-                type="number"
-                inputMode="decimal"
+            <div key={idx} className="flex items-center gap-1.5">
+              <span className="w-4 shrink-0 text-xs text-neutral-500">{idx + 1}</span>
+              <Stepper
                 value={set.weight}
-                onChange={(e) => updateSet(idx, { weight: Number(e.target.value) || 0 })}
+                onChange={(v) => updateSet(idx, { weight: v ?? 0 })}
+                step={5}
                 placeholder="lbs"
-                className="w-16 rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-center text-sm text-neutral-100 outline-none focus:border-purple-500"
               />
-              <span className="text-neutral-600">×</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={set.reps ?? ''}
-                onChange={(e) =>
-                  updateSet(idx, { reps: e.target.value === '' ? null : Number(e.target.value) })
-                }
-                placeholder="reps"
-                className="w-16 rounded-lg border border-neutral-800 bg-neutral-950 px-2 py-1.5 text-center text-sm text-neutral-100 outline-none focus:border-purple-500"
-              />
+              <span className="shrink-0 text-neutral-600">×</span>
+              <Stepper value={set.reps} onChange={(v) => updateSet(idx, { reps: v })} step={1} placeholder="reps" />
               <button
                 type="button"
                 onClick={() => removeSet(idx)}
-                className="ml-auto rounded-lg px-2 py-1 text-xs text-neutral-600 active:bg-neutral-800"
+                className="ml-auto shrink-0 rounded-lg px-2 py-1 text-xs text-neutral-600 active:bg-neutral-800"
+                aria-label="Remove set"
               >
                 ✕
               </button>

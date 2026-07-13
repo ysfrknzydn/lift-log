@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import type { WorkoutSession } from '../lib/types'
-import { deleteSession, loadSessions } from '../lib/storage'
+import { deleteSession, exportSessionsAsJson, importSessions, loadSessions } from '../lib/storage'
 import { copyToClipboard, formatSessionAsText, formatSessionsAsText } from '../lib/export'
 
 export default function HistoryTab() {
@@ -8,6 +8,7 @@ export default function HistoryTab() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [copiedMsg, setCopiedMsg] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     setSessions(loadSessions())
@@ -49,6 +50,41 @@ export default function HistoryTab() {
 
   const selectedSessions = sessions.filter((s) => selected.has(s.id))
 
+  const handleExportBackup = () => {
+    const json = exportSessionsAsJson()
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `lift-log-backup-${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    setCopiedMsg('Backup file downloaded')
+    setTimeout(() => setCopiedMsg(null), 2500)
+  }
+
+  const handleImportClick = () => fileInputRef.current?.click()
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    try {
+      const text = await file.text()
+      const count = (JSON.parse(text) as unknown[]).length
+      const replace = window.confirm(
+        `Found ${count} session(s) in this backup.\n\nOK = Replace all local data with the backup\nCancel = Merge (keep existing sessions, add any new ones)`,
+      )
+      const updated = importSessions(text, replace ? 'replace' : 'merge')
+      setSessions(updated)
+      setCopiedMsg(`Backup ${replace ? 'restored (replaced)' : 'merged'} — ${updated.length} session(s) total`)
+    } catch (err) {
+      setCopiedMsg(err instanceof Error ? `Import failed: ${err.message}` : 'Import failed — invalid file')
+    } finally {
+      setTimeout(() => setCopiedMsg(null), 3500)
+    }
+  }
+
   return (
     <div className="px-4 pt-6">
       <div className="flex items-center justify-between">
@@ -62,6 +98,31 @@ export default function HistoryTab() {
             Copy all
           </button>
         )}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleExportBackup}
+          disabled={sessions.length === 0}
+          className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 py-2 text-xs font-medium text-neutral-300 disabled:opacity-40"
+        >
+          ⬇ Backup to file
+        </button>
+        <button
+          type="button"
+          onClick={handleImportClick}
+          className="flex-1 rounded-lg bg-neutral-900 border border-neutral-800 py-2 text-xs font-medium text-neutral-300"
+        >
+          ⬆ Restore from file
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/json"
+          onChange={handleFileChange}
+          className="hidden"
+        />
       </div>
 
       {selected.size > 0 && (

@@ -1,4 +1,4 @@
-import type { WorkoutSession, SplitDay } from './types'
+import { SPLIT_DAYS, type WorkoutSession, type SplitDay } from './types'
 
 const STORAGE_KEY = 'lift-log:sessions'
 
@@ -46,4 +46,39 @@ export function getLastSessionFor(
 
 export function newId(): string {
   return crypto.randomUUID()
+}
+
+export function exportSessionsAsJson(): string {
+  return JSON.stringify(loadSessions(), null, 2)
+}
+
+function isValidSession(s: unknown): s is WorkoutSession {
+  if (typeof s !== 'object' || s === null) return false
+  const obj = s as Record<string, unknown>
+  return (
+    typeof obj.id === 'string' &&
+    typeof obj.date === 'string' &&
+    typeof obj.splitDay === 'string' &&
+    (SPLIT_DAYS as readonly string[]).includes(obj.splitDay) &&
+    Array.isArray(obj.exercises)
+  )
+}
+
+/** Parses and applies a backup file. Throws if the file has no valid sessions. */
+export function importSessions(json: string, mode: 'replace' | 'merge'): WorkoutSession[] {
+  const parsed: unknown = JSON.parse(json)
+  if (!Array.isArray(parsed)) throw new Error('Backup file must contain a list of sessions')
+  const valid = parsed.filter(isValidSession)
+  if (valid.length === 0) throw new Error('No valid sessions found in backup file')
+
+  if (mode === 'replace') {
+    saveSessions(valid)
+    return loadSessions()
+  }
+
+  const existing = loadSessions()
+  const existingIds = new Set(existing.map((s) => s.id))
+  const merged = [...existing, ...valid.filter((s) => !existingIds.has(s.id))]
+  saveSessions(merged)
+  return loadSessions()
 }

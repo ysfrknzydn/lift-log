@@ -51,7 +51,6 @@ export function exerciseHistory(
 
 export interface LastPerformance {
   date: string
-  plannedWeight: number
   setsSummary: string
 }
 
@@ -68,13 +67,13 @@ export function getLastPerformance(
     )
     if (!ex) continue
     if (ex.skipped) {
-      return { date: session.date, plannedWeight: ex.plannedWeight, setsSummary: 'skipped' }
+      return { date: session.date, setsSummary: 'skipped' }
     }
     const setsSummary = ex.sets
       .filter((s) => s.reps != null)
       .map((s) => `${s.weight}x${s.reps}`)
       .join(', ')
-    return { date: session.date, plannedWeight: ex.plannedWeight, setsSummary: setsSummary || '—' }
+    return { date: session.date, setsSummary: setsSummary || '—' }
   }
   return undefined
 }

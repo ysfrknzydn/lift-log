@@ -17,8 +17,7 @@ function buildTemplate(date: string, splitDay: SplitDay): WorkoutSession {
     .map((ex) => ({
       id: newId(),
       name: ex.name,
-      plannedWeight: ex.plannedWeight,
-      sets: ex.sets.map((s) => ({ reps: null, weight: s.weight || ex.plannedWeight })),
+      sets: ex.sets.map((s) => ({ reps: null, weight: s.weight })),
       skipped: false,
       notes: '',
     }))
@@ -67,7 +66,6 @@ export default function LogTab() {
     const blank: ExerciseEntry = {
       id: newId(),
       name: '',
-      plannedWeight: 0,
       sets: [{ reps: null, weight: 0 }],
       skipped: false,
       notes: '',
